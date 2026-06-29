@@ -452,17 +452,16 @@ function updateHeader() {
   document.getElementById('mes-badge').textContent = MESES_NOMES[now.getMonth()].substring(0,3)+'/'+String(now.getFullYear()).substring(2);
 }
 
+function getValorPessoa(pessoaId) {
+  return dados.contas.reduce((s,c) => {
+    const resp = c.responsaveis && c.responsaveis.length > 0 ? c.responsaveis : dados.pessoas.map(p=>p.id);
+    if (resp.includes(pessoaId)) return s + c.valor/resp.length;
+    return s;
+  }, 0);
+}
+
 function render() {
   const total = dados.contas.reduce((s,c)=>s+c.valor,0);
-  
-  // Calculate each person's share
-  function getValorPessoa(pessoaId) {
-    return dados.contas.reduce((s,c) => {
-      const resp = c.responsaveis && c.responsaveis.length > 0 ? c.responsaveis : dados.pessoas.map(p=>p.id);
-      if (resp.includes(pessoaId)) return s + c.valor/resp.length;
-      return s;
-    }, 0);
-  }
 
   document.getElementById('total-geral').textContent = fmt(total);
   document.getElementById('total-cada').textContent = '—';
