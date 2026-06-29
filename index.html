@@ -120,7 +120,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
-import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, onSnapshot, enableNetwork } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCxyYBAxVKbFUhK-73SU08VsGf5Az3HpG4",
@@ -133,48 +133,101 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+enableNetwork(db);
+
+// Documento principal — dados sem fotos
 const DOC_REF = doc(db, 'contascasa', 'dados');
+// Documento separado — só fotos das pessoas
+const FOTOS_REF = doc(db, 'contascasa', 'fotos');
 
-let isFirstLoad = true;
+let ultimoSave = 0;
+let salvando = false;
+let primeiraVez = true;
 
-// Real-time listener
 onSnapshot(DOC_REF, (snap) => {
-  if (snap.exists()) {
-    window.fbData = snap.data();
-  } else {
-    window.fbData = {};
-  }
-  if (isFirstLoad) {
-    isFirstLoad = false;
+  const fbDados = snap.exists() ? snap.data() : {};
+  window.fbData = fbDados;
+
+  if (primeiraVez) {
+    primeiraVez = false;
     window.fbReady = true;
     document.dispatchEvent(new Event('firebase-ready'));
-  } else {
-    // Sync from another device
-    if (window.fbData && window.fbData['dados']) {
-      try {
-        const newDados = JSON.parse(window.fbData['dados']);
-        if (typeof window.syncFromCloud === 'function') window.syncFromCloud(newDados);
-      } catch(e) {}
-    }
+    return;
+  }
+
+  if (Date.now() - ultimoSave > 3000 && fbDados['dados']) {
+    try {
+      const nd = JSON.parse(fbDados['dados']);
+      if (typeof window.syncFromCloud === 'function') window.syncFromCloud(nd);
+    } catch(e) {}
   }
 }, (error) => {
-  console.log('Firebase error:', error);
   window.fbData = {};
   window.fbReady = true;
   document.dispatchEvent(new Event('firebase-ready'));
 });
 
+// Listener para fotos — atualiza fotos das pessoas em tempo real
+onSnapshot(FOTOS_REF, (snap) => {
+  if (snap.exists()) {
+    window.fbFotos = snap.data().fotos || {};
+    if (typeof window.aplicarFotos === 'function') window.aplicarFotos();
+  }
+});
+
 window.saveToFirebase = async function(data) {
+  if (salvando) return;
   try {
-    await setDoc(DOC_REF, { dados: JSON.stringify(data) }, { merge: true });
-  } catch(e) { console.log('Firebase save error:', e); }
+    salvando = true;
+    ultimoSave = Date.now();
+    const dataParaSalvar = JSON.parse(JSON.stringify(data));
+    const fotosMap = {};
+    dataParaSalvar.pessoas = dataParaSalvar.pessoas.map(p => {
+      if (p.foto) { fotosMap[p.id] = p.foto; delete p.foto; }
+      return p;
+    });
+    dataParaSalvar.historico = dataParaSalvar.historico.map(h => {
+      h.pessoas = (h.pessoas||[]).map(p => { if(p.foto) delete p.foto; return p; });
+      return h;
+    });
+    await setDoc(DOC_REF, { dados: JSON.stringify(dataParaSalvar) }, { merge: true });
+    if (Object.keys(fotosMap).length > 0) {
+      const fotosAtuais = window.fbFotos || {};
+      const novasFotos = {...fotosAtuais, ...fotosMap};
+      await setDoc(FOTOS_REF, { fotos: novasFotos }, { merge: true });
+      window.fbFotos = novasFotos;
+    }
+  } catch(e) {
+    console.log('Firebase save error:', e);
+  } finally {
+    salvando = false;
+  }
 };
 
 window.loadFromFirebase = function() {
   if (window.fbData && window.fbData['dados']) {
-    try { return JSON.parse(window.fbData['dados']); } catch {}
+    try {
+      const d = JSON.parse(window.fbData['dados']);
+      const fotos = window.fbFotos || {};
+      d.pessoas = (d.pessoas||[]).map(p => {
+        if (fotos[p.id]) p.foto = fotos[p.id];
+        return p;
+      });
+      return d;
+    } catch {}
   }
   return null;
+};
+
+window.aplicarFotos = function() {
+  if (typeof dados === 'undefined' || !dados.pessoas) return;
+  const fotos = window.fbFotos || {};
+  let alterou = false;
+  dados.pessoas = dados.pessoas.map(p => {
+    if (fotos[p.id] && p.foto !== fotos[p.id]) { p.foto = fotos[p.id]; alterou = true; }
+    return p;
+  });
+  if (alterou && typeof render === 'function') render();
 };
 </script>
 </head>
