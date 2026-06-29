@@ -700,7 +700,7 @@ function renderHistorico() {
       <div class="hist-header" onclick="toggleHist('hist-${i}')">
         <div>
           <div class="hist-mes">${h.mes}</div>
-          <div class="hist-total">Total: ${fmt(h.total)} · ${fmt(h.cada)} por pessoa</div>
+          <div class="hist-total">Total: ${fmt(h.total)} · ${fmt(h.cada)} p/ pessoa${(() => { const excl = (h.pessoas||[]).filter(p => p.valor && Math.abs(p.valor - h.cada) > 0.01); return excl.length > 0 ? ' · ' + excl.map(p => p.nome + ' ' + fmt(p.valor)).join(', ') : ''; })()}</div>
         </div>
         <div style="display:flex;align-items:center;gap:10px">
           <button onclick="event.stopPropagation();deletarHistorico(${h.originalIdx})" 
