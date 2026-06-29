@@ -477,7 +477,17 @@ function render() {
   const total = dados.contas.reduce((s,c)=>s+c.valor,0);
 
   document.getElementById('total-geral').textContent = fmt(total);
-  const cada = dados.pessoas.length > 0 ? total / dados.pessoas.length : 0;
+  // Cada um paga — exclui pessoas que têm contas exclusivas (responsável único)
+  const pessoasExclusivas = new Set();
+  dados.contas.forEach(c => {
+    if (c.responsaveis && c.responsaveis.length === 1) pessoasExclusivas.add(c.responsaveis[0]);
+  });
+  const pessoasComuns = dados.pessoas.filter(p => !pessoasExclusivas.has(p.id));
+  const totalComum = dados.contas.reduce((s,c) => {
+    if (!c.responsaveis || c.responsaveis.length === 0 || c.responsaveis.length > 1) return s + c.valor;
+    return s;
+  }, 0);
+  const cada = pessoasComuns.length > 0 ? totalComum / pessoasComuns.length : 0;
   document.getElementById('total-cada').textContent = cada > 0 ? fmt(cada) : '—';
 
   const pagos = dados.pessoas.filter(p=>p.pago).length;
