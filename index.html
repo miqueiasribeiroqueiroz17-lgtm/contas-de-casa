@@ -447,9 +447,21 @@ function showTab(name, btn) {
 
 function updateHeader() {
   const now = new Date();
-  const mes = MESES_NOMES[now.getMonth()] + ' de ' + now.getFullYear();
-  const badge = MESES_NOMES[now.getMonth()].substring(0,3)+'/'+String(now.getFullYear()).substring(2);
-  document.getElementById('header-mes').textContent = mes;
+  let mesIdx = now.getMonth();
+  let ano = now.getFullYear();
+  // Se o mês atual já está no histórico, avança para o próximo
+  const mesAtualNome = MESES_NOMES[mesIdx]+'/'+ano;
+  const mesJaFechado = dados && (dados.mesFechado || (dados.historico && dados.historico.some(h => h.mes === mesAtualNome)));
+  if (mesJaFechado) {
+    mesIdx += 1;
+    if (mesIdx > 11) { mesIdx = 0; ano += 1; }
+  }
+  const mesNome = MESES_NOMES[mesIdx] + ' de ' + ano;
+  const badge = MESES_NOMES[mesIdx].substring(0,3)+'/'+String(ano).substring(2);
+  const diasSemana = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
+  const hoje = new Date();
+  const dataCompleta = diasSemana[hoje.getDay()] + ', ' + hoje.getDate() + ' de ' + MESES_NOMES[hoje.getMonth()] + ' de ' + hoje.getFullYear();
+  document.getElementById('header-mes').textContent = dataCompleta;
   document.getElementById('mes-badge').textContent = badge;
 }
 
@@ -465,7 +477,8 @@ function render() {
   const total = dados.contas.reduce((s,c)=>s+c.valor,0);
 
   document.getElementById('total-geral').textContent = fmt(total);
-  document.getElementById('total-cada').textContent = '—';
+  const cada = dados.pessoas.length > 0 ? total / dados.pessoas.length : 0;
+  document.getElementById('total-cada').textContent = cada > 0 ? fmt(cada) : '—';
 
   const pagos = dados.pessoas.filter(p=>p.pago).length;
   const pct = dados.pessoas.length>0 ? Math.round((pagos/dados.pessoas.length)*100) : 0;
@@ -508,7 +521,7 @@ function render() {
       <div><span class="pessoa-tag ${p.pago?'tag-ok':'tag-p'}">${p.pago?'✅ Pago':'⏳ Pendente'}</span></div>
     </div>`).join('');
   
-  // Botões do mês
+  // Botões do mês — baseado apenas no mesFechado
   const btnFechar = document.getElementById('btn-fechar-mes');
   const btnIniciar = document.getElementById('btn-iniciar-mes');
   if (btnFechar) btnFechar.style.display = fechado ? 'none' : 'flex';
@@ -592,7 +605,7 @@ function renderHistorico() {
 
   // --- GRÁFICO DE EVOLUÇÃO ---
   const anoParaGrafico = window.anoResumoSelecionado || String(new Date().getFullYear());
-  const chartData = [...dados.historico].filter(h => h.mes.split('/')[1].trim() === anoParaGrafico);
+  const chartData = [...dados.historico].filter(h => h.mes && typeof h.mes === 'string' && h.mes.split('/')[1] && h.mes.split('/')[1].trim() === anoParaGrafico);
   const maxVal = Math.max(...chartData.map(h=>h.total), 1);
   const chartBars = chartData.map(h => {
     const pct = Math.round((h.total / maxVal) * 100);
@@ -608,9 +621,9 @@ function renderHistorico() {
 
   // --- RESUMO ANUAL ---
   const anoAtual = new Date().getFullYear();
-  const anosDisponiveis = [...new Set(dados.historico.map(h => h.mes.split('/')[1].trim()))].sort();
+  const anosDisponiveis = [...new Set(dados.historico.filter(h => h.mes && typeof h.mes === 'string').map(h => h.mes.split('/')[1].trim()))].sort();
   const anoSelecionado = window.anoResumoSelecionado || String(anoAtual);
-  const mestsAno = dados.historico.filter(h => h.mes.split('/')[1].trim() === anoSelecionado);
+  const mestsAno = dados.historico.filter(h => h.mes && typeof h.mes === 'string' && h.mes.split('/')[1] && h.mes.split('/')[1].trim() === anoSelecionado);
   const totalAno = mestsAno.reduce((s,h)=>s+h.total, 0);
 
   const pessoasMap = {};
@@ -671,7 +684,7 @@ function renderHistorico() {
       </div>
     </div>` : '';
 
-  const reversedFiltrado = reversed.filter(h => h.mes.split('/')[1].trim() === anoSelecionado);
+  const reversedFiltrado = reversed.filter(h => h.mes && typeof h.mes === 'string' && h.mes.split('/')[1] && h.mes.split('/')[1].trim() === anoSelecionado);
   hl.innerHTML = grafico + resumoAnual + reversedFiltrado.map((h,i)=>`
     <div class="hist-card">
       <div class="hist-header" onclick="toggleHist('hist-${i}')">
@@ -722,12 +735,12 @@ function desbloquearMes() {
 }
 
 function iniciarNovoMes() {
-  if (!confirm('Iniciar novo mês? Os pagamentos serão zerados e os valores atualizados estarão valendo.')) return;
+  if (!confirm('Iniciar novo mês? Os pagamentos e valores das contas serão zerados para você lançar os novos.')) return;
   dados.mesFechado = false;
-  dados.contas.forEach(c=>c.pago=false);
-  dados.pessoas.forEach(p=>p.pago=false);
-  save(); render(); renderGer();
-  showToast('🚀 Novo mês iniciado!');
+  dados.contas.forEach(c => { c.valor = 0; c.pago = false; });
+  dados.pessoas.forEach(p => p.pago = false);
+  save(); updateHeader(); render(); renderGer();
+  showToast('🚀 Novo mês iniciado! Lance os novos valores em Gerenciar.');
 }
 
 function deletarHistorico(idx) {
@@ -880,8 +893,8 @@ function fecharMes() {
   });
 
   dados.mesFechado = true;
-  save(); render();
-  showToast('🔒 Mês fechado! Clique em "Iniciar Novo Mês" quando quiser começar o próximo.');
+  save(); render(); renderGer();
+  showToast('🔒 Mês fechado! Clique em "Iniciar Novo Mês" para começar o próximo.');
 }
 
 function resetarTudo() {
