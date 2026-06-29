@@ -609,13 +609,20 @@ function renderHistorico() {
   const totalAno = mestsAno.reduce((s,h)=>s+h.total, 0);
 
   const pessoasMap = {};
+  // Monta mapa de fotos atuais por nome
+  const fotosAtivas = window.fbFotos || {};
+  const fotosPorNome = {};
+  dados.pessoas.forEach(p => {
+    const foto = p.foto || fotosAtivas[p.id];
+    if (foto) fotosPorNome[p.nome] = foto;
+  });
   mestsAno.forEach(h => {
     h.pessoas.forEach(p => {
-      if (!pessoasMap[p.nome]) pessoasMap[p.nome] = { nome: p.nome, foto: p.foto, total: 0, meses: 0, pagou: 0 };
+      if (!pessoasMap[p.nome]) pessoasMap[p.nome] = { nome: p.nome, foto: fotosPorNome[p.nome] || p.foto, total: 0, meses: 0, pagou: 0 };
       pessoasMap[p.nome].total += h.cada || 0;
       pessoasMap[p.nome].meses += 1;
       if (p.pago) pessoasMap[p.nome].pagou += 1;
-      if (p.foto) pessoasMap[p.nome].foto = p.foto;
+      if (fotosPorNome[p.nome]) pessoasMap[p.nome].foto = fotosPorNome[p.nome];
     });
   });
   const pessoasAno = Object.values(pessoasMap);
