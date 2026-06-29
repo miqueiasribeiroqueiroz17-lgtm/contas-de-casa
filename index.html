@@ -896,7 +896,13 @@ function fecharMes() {
   dados.historico.push({
     mes: mesNome,
     total,
-    cada: dados.pessoas.length>0 ? total/dados.pessoas.length : 0,
+    cada: (() => {
+      const excl = new Set();
+      dados.contas.forEach(c => { if (c.responsaveis && c.responsaveis.length === 1) excl.add(c.responsaveis[0]); });
+      const comuns = dados.pessoas.filter(p => !excl.has(p.id));
+      const totComum = dados.contas.reduce((s,c) => (!c.responsaveis || c.responsaveis.length !== 1) ? s+c.valor : s, 0);
+      return comuns.length > 0 ? totComum / comuns.length : 0;
+    })(),
     contas: dados.contas.map(c=>({...c})),
     pessoas: dados.pessoas.map(p=>({...p, valor: getValorPessoa(p.id)})),
     data: new Date().toISOString()
