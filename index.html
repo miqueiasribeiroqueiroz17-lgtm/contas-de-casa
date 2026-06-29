@@ -889,7 +889,15 @@ function deletarPessoa(id) {
 function fecharMes() {
   const total = dados.contas.reduce((s,c)=>s+c.valor,0);
   const now = new Date();
-  const mesNome = MESES_NOMES[now.getMonth()]+'/'+now.getFullYear();
+  let mesIdx = now.getMonth();
+  let mesAno = now.getFullYear();
+  // Se o mês atual já está no histórico, usa o próximo
+  const mesAtualTmp = MESES_NOMES[mesIdx]+'/'+mesAno;
+  if (dados.historico.some(h => h.mes === mesAtualTmp)) {
+    mesIdx += 1;
+    if (mesIdx > 11) { mesIdx = 0; mesAno += 1; }
+  }
+  const mesNome = MESES_NOMES[mesIdx]+'/'+mesAno;
 
   if (!confirm('Fechar o mês de '+mesNome+'? Os pagamentos serão salvos no histórico e nada poderá ser alterado.')) return;
 
